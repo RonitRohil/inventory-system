@@ -1,6 +1,6 @@
 # Inventory & Order Management System
 
-A full-stack app for managing products, customers, and orders — built with FastAPI, React, PostgreSQL, and Docker. Submitted as part of the Ethara AI Software Engineer technical assessment.
+A full-stack app for managing products, customers, and orders, built with FastAPI, React, PostgreSQL, and Docker. Submitted as part of the Ethara AI Software Engineer technical assessment.
 
 **GitHub:** https://github.com/RonitRohil/inventory-system  
 **Docker Hub:** https://hub.docker.com/r/ronitrohil04/inventory-backend  
@@ -25,44 +25,45 @@ A full-stack app for managing products, customers, and orders — built with Fas
 
 ### How I read the spec
 
-The assessment asked for a system that manages products, customers, and orders — with the key constraint that inventory must stay consistent across order creation and cancellation. That constraint drove most of the backend design.
+The assessment asks for a system that manages products, customers, and orders, with inventory staying consistent across order creation and cancellation. That consistency constraint is what drove most of the backend decisions.
 
-I started with the data model. Orders reference customers and contain multiple line items (each linking a product, a quantity, and the price at time of purchase). Storing `unit_price` on the order item rather than reading it from the product table at query time means historical orders don't change if a product's price changes later — which is how real-world order systems behave.
+I started with the data model. Orders reference customers and contain multiple line items, each linking a product, a quantity, and the price at time of purchase. Storing `unit_price` on the order item (rather than reading it from the product table later) means historical orders don't silently change if a product's price is updated. That's standard for any real order system, so I did it here too.
 
-### Backend choices
+### Backend
 
-**FastAPI over Flask** — FastAPI gives automatic OpenAPI docs and Pydantic validation out of the box. For an API-heavy assignment where the spec calls for request validation and proper error codes, it removes a lot of boilerplate.
+I picked FastAPI over Flask because the spec explicitly calls for request validation and proper HTTP error codes. FastAPI's Pydantic integration handles both with almost no setup, and the auto-generated `/docs` page gives reviewers a working sandbox without any extra effort.
 
-**SQLAlchemy ORM over raw SQL** — Relationships between Order, OrderItem, Product, and Customer are handled through the ORM, which makes the cascade delete on order items automatic and reduces the chance of orphaned records.
+For the database layer, SQLAlchemy ORM over raw SQL. The relationships between Order, OrderItem, Product, and Customer are complex enough that cascade deletes on order items are hard to get right by hand. The ORM handles that automatically.
 
-**Stock deduction inside a transaction** — The create_order endpoint validates stock for all items first, then deducts in a single transaction using `db.flush()` to get the order ID before committing. If anything fails mid-way, the whole thing rolls back. No partial stock deductions.
+The trickiest part was the order creation flow. I validate stock for every item first, then deduct everything inside a single transaction using `db.flush()` to get the order ID before committing. If anything fails halfway through, the whole thing rolls back. No partial deductions, no phantom stock changes.
 
-**Row-level lock on cancel** — `with_for_update()` on the order row when cancelling prevents two concurrent cancellation requests from both reading the same stock value and restoring it twice.
+Order cancellation has a race condition risk: two concurrent cancel requests could both read the same stock value and restore it twice. Fixed with `with_for_update()` on the order row, which locks it for the duration of the transaction.
 
-**Eager loading on order queries** — Used `joinedload` on all order endpoints to avoid N+1 queries when loading `order_items` → `product` for each order.
+Two smaller things worth calling out: `joinedload` on all order queries to avoid N+1 when fetching `order_items` with their products, and 409 Conflict (not 400) for duplicate SKU and email. The input is valid; the state is the problem. That distinction matters.
 
-**CORS** — Explicit origin list only. Wildcards are incompatible with `allow_credentials=True` per the CORS spec and get blocked by browsers.
+CORS is set to explicit origins only. Wildcards can't be used with `allow_credentials=True` per the CORS spec, and browsers will block it.
 
-**409 over 400 for conflicts** — Duplicate SKU and duplicate email return 409 Conflict, not 400 Bad Request. The input is valid; the state is the problem.
+### Frontend
 
-### Frontend choices
+All API calls go through a single `api/client.js` wrapper that handles JSON serialisation, error extraction, and the base URL. Pages never call `fetch` directly, which makes it easy to change the base URL or add auth headers in one place later.
 
-**React with a centralised API client** — All fetch calls go through a single `api/client.js` wrapper that handles JSON serialisation, error extraction, and the base URL from the environment variable. Pages never call `fetch` directly.
+The Orders page only fetches the orders list on mount. Customers and products (needed for the "New Order" modal dropdowns) load the first time that modal opens, then stay cached in state. No point hitting those endpoints on every page load when you might not even open the modal.
 
-**Lazy data loading in Orders** — The Orders page only fetches the orders list on mount. Customers and products (needed for the create-order dropdown) are fetched the first time the "New Order" modal opens, then cached in state for subsequent opens.
+Add/Edit/Delete interactions use modals rather than separate routes. For a data management tool with no user-facing URLs, modals keep things simpler and the navigation cleaner.
 
-**Modal pattern** — Add/Edit/Delete interactions happen in modals rather than separate routes to keep the URL clean and reduce navigation overhead for what is essentially a data-management tool.
+### Docker
 
-### Docker setup
+Three services in Docker Compose: PostgreSQL, backend, frontend. The backend waits for the database healthcheck to pass before starting. The frontend is a two-stage build: Vite compiles the static files in one stage, nginx serves them in the second and proxies `/api/` to the backend container.
 
-Three services in Docker Compose — PostgreSQL, backend, frontend. The backend waits for the database to pass its healthcheck before starting. The frontend is a two-stage build: Vite builds the static files, nginx serves them and proxies `/api/` to the backend.
+### What's not done (and why)
 
-### Known limitations
+`Base.metadata.create_all` creates tables on startup. It works fine here but a production system would use Alembic migrations for any schema changes. Worth noting.
 
-- **No Alembic migrations** — `Base.metadata.create_all` creates tables on startup. Fine for this scope, but in production you'd want proper migration files.
-- **Float for prices** — Using Python `float` / PostgreSQL `FLOAT` for monetary values, which has floating-point precision limits. A production system would use `NUMERIC(10,2)`.
-- **No idempotency keys on POST /orders** — A client retrying a timed-out order creation will create a duplicate. The fix is a client-generated UUID `idempotency_key` stored server-side and deduplicated.
-- **No rate limiting** — No protection against bulk requests on the list endpoints.
+Prices are stored as `float`, which has floating point precision issues for money. The correct type is `NUMERIC(10,2)`, but changing it would require a migration, and for this scope the difference is negligible.
+
+`POST /orders` has no idempotency key. A client retrying a timed-out request will create a duplicate order. The fix is a client-generated UUID sent in the request and stored server-side to deduplicate, but that's out of scope here.
+
+No rate limiting on the list endpoints.
 
 ---
 
@@ -176,10 +177,10 @@ npm run dev
 | GET | `/customers` | List all customers |
 | GET | `/customers/{id}` | Get customer by ID |
 | DELETE | `/customers/{id}` | Delete customer |
-| POST | `/orders` | Create order — validates stock, deducts on success |
+| POST | `/orders` | Create order, validates stock and deducts on success |
 | GET | `/orders` | List all orders |
 | GET | `/orders/{id}` | Get order with customer and line items |
-| DELETE | `/orders/{id}` | Cancel order — restores stock |
+| DELETE | `/orders/{id}` | Cancel order, restores stock |
 
 Swagger UI is at `/docs` when the backend is running.
 
@@ -189,11 +190,11 @@ Swagger UI is at `/docs` when the backend is running.
 
 - Duplicate SKUs are rejected (409 Conflict)
 - Duplicate customer emails are rejected (409 Conflict)
-- Orders are rejected if requested quantity exceeds available stock
-- Stock is deducted for each line item when an order is created
-- Stock is restored when an order is cancelled (with row-level lock to prevent race conditions)
-- Order totals are calculated server-side (`unit_price × quantity` per item) — clients can't override it
-- DELETE endpoints are idempotent — cancelling an already-deleted resource returns 204
+- Orders are rejected if any item's requested quantity exceeds available stock
+- Stock is deducted per line item when an order is created
+- Stock is restored when an order is cancelled, with a row-level lock to prevent race conditions
+- Order totals are calculated server-side (`unit_price × quantity` per item), clients cannot override
+- DELETE endpoints are idempotent, cancelling an already-deleted resource returns 204
 
 ---
 
@@ -215,7 +216,7 @@ Image: `docker.io/ronitrohil04/inventory-backend:latest`
 - Created a Web Service pointing to this repo, root directory `backend`
 - Build command: `pip install -r requirements.txt`
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
-- Set env vars: `DATABASE_URL` (Render internal Postgres URL), `FRONTEND_URL` (Vercel URL after deploy)
+- Set env vars: `DATABASE_URL` (Render internal Postgres URL), `FRONTEND_URL` (Vercel URL)
 - Live at: https://inventory-system-s8ss.onrender.com/docs
 
 ### 3. Frontend on Vercel
@@ -226,7 +227,7 @@ Image: `docker.io/ronitrohil04/inventory-backend:latest`
 - Vercel auto-detects Vite and runs `npm run build`
 - Live at: https://inventory-system-dun-seven.vercel.app
 
-> Note: Render's free tier spins down after 15 minutes of inactivity. First request after idle takes ~30 seconds to cold-start. Hit `/docs` first if demoing.
+> Render's free tier spins down after 15 minutes idle. First request after a sleep takes 30-60 seconds. Hit `/docs` first when demoing.
 
 ---
 
@@ -234,15 +235,15 @@ Image: `docker.io/ronitrohil04/inventory-backend:latest`
 
 The `bruno/` folder has all 14 requests organised by resource (Dashboard, Products, Customers, Orders).
 
-Open Bruno → **Open Collection** → select the `bruno/` folder → pick the **Local** environment. All requests include example bodies.
+Open Bruno, click **Open Collection**, select the `bruno/` folder, then pick the **Local** environment. All requests have example bodies ready to go.
 
-After deploying, switch to the **Production** environment — it already points to the live Render URL.
+After deploying, switch to **Production** — it already points to the live Render URL.
 
 ---
 
 ## Environment files
 
-Three separate files — all git-ignored, never committed:
+Three separate files, all git-ignored and never committed:
 
 | File | Used by | Key vars |
 |------|---------|----------|
@@ -259,4 +260,4 @@ Copy from the `.env.example` files to get started.
 - [x] GitHub: https://github.com/RonitRohil/inventory-system
 - [x] Docker Hub: `docker.io/ronitrohil04/inventory-backend:latest`
 - [x] Live frontend: https://inventory-system-dun-seven.vercel.app
-- [x] Live backend: https://inventory-system-s8ss.onrender.com — verify `/docs` loads
+- [x] Live backend: https://inventory-system-s8ss.onrender.com (verify `/docs` loads)
