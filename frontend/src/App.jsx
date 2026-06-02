@@ -30,7 +30,7 @@ const styles = {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div style={{ display: 'flex', minHeight: '100vh' }}>
         {/* Sidebar */}
         <nav style={styles.sidebar}>

@@ -1,0 +1,15 @@
+meta {
+  name: Cancel Order
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/orders/1
+  body: none
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}

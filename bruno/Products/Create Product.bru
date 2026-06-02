@@ -1,0 +1,24 @@
+meta {
+  name: Create Product
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Laptop Stand",
+    "sku": "LS-001",
+    "price": 999.99,
+    "quantity": 50
+  }
+}

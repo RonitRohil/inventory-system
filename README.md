@@ -1,144 +1,207 @@
 # Inventory & Order Management System
 
-A production-ready full-stack application to manage products, customers, and orders — built with FastAPI, React, PostgreSQL, and Docker.
+A full-stack app for managing products, customers, and orders — built with FastAPI, React, PostgreSQL, and Docker. Submitted as part of the Ethara AI Software Engineer technical assessment.
 
-## Tech Stack
+**GitHub:** https://github.com/RonitRohil/inventory-system  
+**Docker Hub:** https://hub.docker.com/r/ronitrohil/inventory-backend  
+**Live frontend:** (Vercel URL — add after deploy)  
+**Live backend:** (Render URL — add after deploy)
+
+---
+
+## Tech stack
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.11, FastAPI, SQLAlchemy |
-| Frontend | React 18, Vite, React Router |
+| Backend | Python 3.11, FastAPI, SQLAlchemy ORM |
+| Frontend | React 18, Vite 7, React Router v6 |
 | Database | PostgreSQL 16 |
 | Containerization | Docker, Docker Compose |
+| API testing | Bruno |
 
-## Project Structure
+---
+
+## Project structure
 
 ```
 inventory-system/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py          # App entry, CORS, dashboard endpoint
-│   │   ├── database.py      # DB connection & session
-│   │   ├── models.py        # SQLAlchemy ORM models
+│   │   ├── main.py          # FastAPI app, CORS, /dashboard endpoint
+│   │   ├── database.py      # DB connection, session factory
+│   │   ├── models.py        # SQLAlchemy models (Product, Customer, Order, OrderItem)
 │   │   ├── schemas.py       # Pydantic request/response schemas
 │   │   └── routers/
-│   │       ├── products.py  # CRUD + SKU uniqueness
-│   │       ├── customers.py # CRUD + email uniqueness
-│   │       └── orders.py    # Create (stock check + auto-deduct) + get + cancel
+│   │       ├── products.py  # Full CRUD + SKU uniqueness
+│   │       ├── customers.py # Full CRUD + email uniqueness
+│   │       └── orders.py    # Create (stock check + deduct) + get + cancel
 │   ├── requirements.txt
-│   └── Dockerfile
+│   ├── Dockerfile
+│   └── .env.example
 ├── frontend/
 │   ├── src/
-│   │   ├── api/client.js    # Centralised API calls
-│   │   ├── pages/           # Dashboard, Products, Customers, Orders
-│   │   └── components/      # Shared UI components
-│   ├── package.json
-│   └── Dockerfile
+│   │   ├── api/client.js    # Single fetch wrapper for all API calls
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx   # Stats cards + low-stock table
+│   │   │   ├── Products.jsx    # List + add/edit/delete modals
+│   │   │   ├── Customers.jsx   # List + add/delete modals
+│   │   │   └── Orders.jsx      # List + create order + details modal
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   └── package.json
+├── bruno/                   # Bruno API collection (14 requests, 2 environments)
+│   ├── environments/
+│   ├── Dashboard/
+│   ├── Products/
+│   ├── Customers/
+│   └── Orders/
 ├── docker-compose.yml
 ├── .env.example
 └── .gitignore
 ```
 
-## Local Development (Docker)
+---
+
+## Running locally
+
+### With Docker (quickest)
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/inventory-system.git
+git clone https://github.com/RonitRohil/inventory-system.git
 cd inventory-system
 
-# 2. Copy and configure env
 cp .env.example .env
+# fill in POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB in .env
 
-# 3. Start all services
 docker compose up --build
-
-# App is now running at:
-#   Frontend  → http://localhost:5173
-#   Backend   → http://localhost:8000
-#   API Docs  → http://localhost:8000/docs
 ```
 
-## Local Development (Without Docker)
+Once up:
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8000
+- API docs: http://localhost:8000/docs
 
-### Backend
+### Without Docker
+
+**Backend:**
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+venv\Scripts\activate       # Windows
+# source venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
 
-# Set your local DB URL
-export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/inventory_db
+# backend/.env needs:
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/inventory_db
+# FRONTEND_URL=http://localhost:5173
 
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend
+**Frontend:**
 
 ```bash
 cd frontend
 npm install
-# Create .env.local with:  VITE_API_URL=http://localhost:8000
+
+# frontend/.env.local needs:
+# VITE_API_URL=http://localhost:8000
+
 npm run dev
 ```
 
-## API Endpoints
+---
+
+## API reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/dashboard` | Summary stats + low stock |
-| POST | `/products` | Create product |
+| GET | `/dashboard` | Stats and low-stock products |
+| POST | `/products` | Create a product |
 | GET | `/products` | List all products |
-| GET | `/products/{id}` | Get product |
+| GET | `/products/{id}` | Get product by ID |
 | PUT | `/products/{id}` | Update product |
 | DELETE | `/products/{id}` | Delete product |
-| POST | `/customers` | Create customer |
+| POST | `/customers` | Create a customer |
 | GET | `/customers` | List all customers |
-| GET | `/customers/{id}` | Get customer |
+| GET | `/customers/{id}` | Get customer by ID |
 | DELETE | `/customers/{id}` | Delete customer |
-| POST | `/orders` | Create order (auto-deducts stock) |
+| POST | `/orders` | Create order — validates stock, deducts on success |
 | GET | `/orders` | List all orders |
-| GET | `/orders/{id}` | Get order details |
-| DELETE | `/orders/{id}` | Cancel order (restores stock) |
+| GET | `/orders/{id}` | Get order with customer and line items |
+| DELETE | `/orders/{id}` | Cancel order — restores stock |
 
-Interactive Swagger docs at `/docs` when running locally.
+Swagger UI is at `/docs` when the backend is running.
 
-## Business Logic
+---
 
-- Product SKU must be unique across all products
-- Customer email must be unique
-- Product quantity can never go negative
+## Business logic
+
+- Duplicate SKUs are rejected (409)
+- Duplicate customer emails are rejected (409)
 - Orders are rejected if requested quantity exceeds available stock
-- Creating an order automatically deducts stock for each item
-- Cancelling an order restores stock
-- Order total is calculated automatically from `unit_price × quantity`
+- Stock is deducted for each line item when an order is created
+- Stock is restored when an order is cancelled
+- Order totals are calculated server-side (`unit_price × quantity` per item) — clients can't override it
+
+---
+
+## API testing with Bruno
+
+The `bruno/` folder has all 14 requests organised by resource (Dashboard, Products, Customers, Orders).
+
+Open Bruno → **Open Collection** → select the `bruno/` folder → pick the **Local** environment. All requests include example bodies so you can run them straight away.
+
+After deploying, update `bruno/environments/Production.bru` with your Render URL and switch environments there.
+
+---
 
 ## Deployment
 
-### Backend → Render
+### Backend on Render
 
-1. Push code to GitHub
-2. New Web Service → connect repo → set root to `backend/`
-3. Set environment variables: `DATABASE_URL`, `FRONTEND_URL`
+1. Push to GitHub
+2. Render → New Web Service → connect `RonitRohil/inventory-system` → root directory: `backend`
+3. Add env vars: `DATABASE_URL` (Render Postgres), `FRONTEND_URL` (your Vercel URL)
 4. Deploy
 
-### Frontend → Vercel
+### Frontend on Vercel
 
-1. New Project → import GitHub repo → set root to `frontend/`
-2. Set environment variable: `VITE_API_URL=<your-render-backend-url>`
+1. Vercel → Import `RonitRohil/inventory-system` → root directory: `frontend`
+2. Add env var: `VITE_API_URL=<your-render-backend-url>`
 3. Deploy
 
-### Docker Hub (backend image)
+### Docker Hub
 
 ```bash
-docker build -t YOUR_USERNAME/inventory-backend:latest ./backend
-docker push YOUR_USERNAME/inventory-backend:latest
+docker build -t ronitrohil/inventory-backend:latest ./backend
+docker push ronitrohil/inventory-backend:latest
 ```
 
-## Submission Checklist
+Image: `docker.io/ronitrohil/inventory-backend:latest`
 
-- [ ] GitHub repository link
-- [ ] Docker Hub image link (`YOUR_USERNAME/inventory-backend:latest`)
+---
+
+## Environment files
+
+Three separate files — all git-ignored, never committed:
+
+| File | Used by | Key vars |
+|------|---------|----------|
+| `.env` | Docker Compose | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
+| `backend/.env` | FastAPI | `DATABASE_URL`, `FRONTEND_URL` |
+| `frontend/.env.local` | Vite | `VITE_API_URL` |
+
+Copy from the `.env.example` files to get started.
+
+---
+
+## Submission checklist
+
+- [ ] GitHub: https://github.com/RonitRohil/inventory-system
+- [ ] Docker Hub: `docker.io/ronitrohil/inventory-backend:latest`
 - [ ] Live frontend URL (Vercel)
-- [ ] Live backend API URL (Render)
+- [ ] Live backend URL (Render) — verify `/docs` loads
