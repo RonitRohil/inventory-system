@@ -14,7 +14,7 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     existing = db.query(Customer).filter(Customer.email == customer.email).first()
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Customer with email '{customer.email}' already exists"
         )
     db_customer = Customer(**customer.model_dump())
@@ -41,6 +41,7 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 def delete_customer(customer_id: int, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+        # Idempotent: already gone, treat as success
+        return
     db.delete(customer)
     db.commit()

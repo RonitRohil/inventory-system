@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from ..database import get_db
@@ -7,6 +7,14 @@ from ..models import Order, OrderItem, Product, Customer
 from ..schemas import OrderCreate, OrderResponse
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+def _get_orders_query(db: Session):
+    """Shared eager-load query to avoid N+1 on order_items → product."""
+    return db.query(Order).options(
+        joinedload(Order.customer),
+        joinedload(Order.order_items).joinedload(OrderItem.product),
+    )
 
 
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -56,18 +64,19 @@ def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         product.quantity -= quantity  # Deduct stock
 
     db.commit()
-    db.refresh(db_order)
-    return db_order
+
+    # Re-fetch with eager load so nested relationships are populated in the response
+    return _get_orders_query(db).filter(Order.id == db_order.id).first()
 
 
 @router.get("", response_model=List[OrderResponse])
 def get_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Order).offset(skip).limit(limit).all()
+    return _get_orders_query(db).offset(skip).limit(limit).all()
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
 def get_order(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(Order).filter(Order.id == order_id).first()
+    order = _get_orders_query(db).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     return order
@@ -75,11 +84,13 @@ def get_order(order_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_order(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(Order).filter(Order.id == order_id).first()
+    # Row-level lock prevents double-cancellation race condition
+    order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
     if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        # Idempotent: already gone, treat as success
+        return
 
-    # Restore stock when order is cancelled
+    # Restore stock for each line item
     for item in order.order_items:
         product = db.query(Product).filter(Product.id == item.product_id).first()
         if product:

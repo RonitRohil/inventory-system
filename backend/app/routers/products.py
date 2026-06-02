@@ -14,7 +14,7 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     existing = db.query(Product).filter(Product.sku == product.sku).first()
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Product with SKU '{product.sku}' already exists"
         )
     db_product = Product(**product.model_dump())
@@ -51,7 +51,7 @@ def update_product(product_id: int, updates: ProductUpdate, db: Session = Depend
         ).first()
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail=f"SKU '{update_data['sku']}' is already in use"
             )
 
@@ -73,6 +73,7 @@ def update_product(product_id: int, updates: ProductUpdate, db: Session = Depend
 def delete_product(product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+        # Idempotent: already gone, treat as success
+        return
     db.delete(product)
     db.commit()

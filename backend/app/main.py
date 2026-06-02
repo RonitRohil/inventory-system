@@ -22,9 +22,11 @@ app = FastAPI(
 )
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# Explicit origins only — wildcards are incompatible with allow_credentials=True
+allowed_origins = list({FRONTEND_URL, "http://localhost:3000", "http://localhost:5173"})
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:3000", "http://localhost:5173", "*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
