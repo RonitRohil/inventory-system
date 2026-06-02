@@ -2,6 +2,10 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import os
+from dotenv import load_dotenv
+
+# Load backend/.env before anything else reads os.getenv()
+load_dotenv()
 
 from .database import engine, Base, get_db
 from .routers import products, customers, orders
