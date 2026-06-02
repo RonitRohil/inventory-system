@@ -29,13 +29,13 @@ const s = {
 }
 
 const statusColor = {
-  pending:   { bg: '#fef3c7', text: '#92400e' },
+  pending: { bg: '#fef3c7', text: '#92400e' },
   completed: { bg: '#d1fae5', text: '#065f46' },
   cancelled: { bg: '#fee2e2', text: '#991b1b' },
 }
 
 // ─── Create Order Modal ───────────────────────────────────────────────────────
-function CreateOrderModal({ customers, products, onSubmit, onClose, error }) {
+function CreateOrderModal({ customers, products, loading, onSubmit, onClose, error }) {
   const [customerId, setCustomerId] = useState('')
   const [rows, setRows] = useState([{ product_id: '', quantity: 1 }])
 
@@ -63,6 +63,7 @@ function CreateOrderModal({ customers, products, onSubmit, onClose, error }) {
     <div style={s.overlay} onClick={onClose}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginBottom: 24, fontSize: 18 }}>Create New Order</h2>
+        {loading && <p style={{ color: '#64748b', marginBottom: 12, fontSize: 13 }}>Loading customers and products…</p>}
         {error && <p style={{ color: '#ef4444', marginBottom: 12, fontSize: 13 }}>{error}</p>}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Customer */}
@@ -221,15 +222,15 @@ function DetailsModal({ order, onClose }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Orders() {
-  const [orders, setOrders]       = useState([])
+  const [orders, setOrders] = useState([])
   const [customers, setCustomers] = useState([])
-  const [products, setProducts]   = useState([])
-  const [loading, setLoading]     = useState(true)
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [modalLoading, setModalLoading] = useState(false)
-  const [error, setError]         = useState('')
+  const [error, setError] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const [formError, setFormError]   = useState('')
-  const [viewing, setViewing]       = useState(null)
+  const [formError, setFormError] = useState('')
+  const [viewing, setViewing] = useState(null)
 
   // Only fetch orders on mount — customers/products load lazily when modal opens
   const loadOrders = () => {
@@ -286,7 +287,7 @@ export default function Orders() {
         <button style={s.btn()} onClick={openCreate}>+ New Order</button>
       </div>
 
-      {error   && <p style={{ color: '#ef4444', marginBottom: 12 }}>{error}</p>}
+      {error && <p style={{ color: '#ef4444', marginBottom: 12 }}>{error}</p>}
       {loading && <p style={{ color: '#64748b' }}>Loading…</p>}
 
       {!loading && (
@@ -347,6 +348,7 @@ export default function Orders() {
         <CreateOrderModal
           customers={customers}
           products={products}
+          loading={modalLoading}
           onSubmit={handleCreate}
           onClose={() => setShowCreate(false)}
           error={formError}
