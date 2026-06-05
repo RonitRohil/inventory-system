@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 
 from ..database import get_db
@@ -15,7 +16,7 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Product with SKU '{product.sku}' already exists"
+            detail=f"Product with SKU '{product.sku}' already exists",
         )
     db_product = Product(**product.model_dump())
     db.add(db_product)
@@ -26,39 +27,47 @@ def create_product(product: ProductCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=List[ProductResponse])
 def get_products(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Product).offset(skip).limit(limit).all()
+    return db.query(Product).order_by(Product.id).offset(skip).limit(limit).all()
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+        )
     return product
 
 
 @router.put("/{product_id}", response_model=ProductResponse)
-def update_product(product_id: int, updates: ProductUpdate, db: Session = Depends(get_db)):
+def update_product(
+    product_id: int, updates: ProductUpdate, db: Session = Depends(get_db)
+):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+        )
 
     update_data = updates.model_dump(exclude_unset=True)
 
     if "sku" in update_data:
-        existing = db.query(Product).filter(
-            Product.sku == update_data["sku"], Product.id != product_id
-        ).first()
+        existing = (
+            db.query(Product)
+            .filter(Product.sku == update_data["sku"], Product.id != product_id)
+            .first()
+        )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"SKU '{update_data['sku']}' is already in use"
+                detail=f"SKU '{update_data['sku']}' is already in use",
             )
 
     if "quantity" in update_data and update_data["quantity"] < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Quantity cannot be negative"
+            detail="Quantity cannot be negative",
         )
 
     for key, value in update_data.items():
@@ -75,5 +84,12 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     if not product:
         # Idempotent: already gone, treat as success
         return
-    db.delete(product)
-    db.commit()
+    try:
+        db.delete(product)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete product — it is referenced by existing orders",
+        )

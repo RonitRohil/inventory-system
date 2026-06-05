@@ -231,6 +231,28 @@ Image: `docker.io/ronitrohil04/inventory-backend:latest`
 
 ---
 
+## Running tests
+
+Tests live in `backend/tests/` and use an in-memory SQLite database (no Docker needed).
+
+```bash
+cd backend
+pip install -r requirements-test.txt
+pytest tests/ -v
+```
+
+11 tests covering:
+- Product CRUD: create, duplicate SKU → 409, update, delete, idempotent delete
+- Product delete with active orders → 409 (not 500)
+- Order creation: stock deduction verified, total amount correct
+- Order creation with insufficient stock → 400, stock unchanged
+- Order cancellation: stock fully restored
+- Unknown customer / product → 404
+
+Note: `with_for_update()` (row-level locking) is patched to a no-op in SQLite tests — locking behaviour requires a real PostgreSQL instance.
+
+---
+
 ## API testing with Bruno
 
 The `bruno/` folder has all 14 requests organised by resource (Dashboard, Products, Customers, Orders).

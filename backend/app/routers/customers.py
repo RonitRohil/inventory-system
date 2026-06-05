@@ -15,7 +15,7 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Customer with email '{customer.email}' already exists"
+            detail=f"Customer with email '{customer.email}' already exists",
         )
     db_customer = Customer(**customer.model_dump())
     db.add(db_customer)
@@ -26,14 +26,16 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=List[CustomerResponse])
 def get_customers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(Customer).offset(skip).limit(limit).all()
+    return db.query(Customer).order_by(Customer.id).offset(skip).limit(limit).all()
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
 def get_customer(customer_id: int, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found"
+        )
     return customer
 
 

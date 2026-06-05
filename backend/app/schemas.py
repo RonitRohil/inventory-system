@@ -2,8 +2,8 @@ from pydantic import BaseModel, EmailStr, field_validator
 from typing import List, Optional
 from datetime import datetime
 
-
 # ─── Product ────────────────────────────────────────────────────────────────
+
 
 class ProductBase(BaseModel):
     name: str
@@ -47,6 +47,7 @@ class ProductResponse(ProductBase):
 
 # ─── Customer ───────────────────────────────────────────────────────────────
 
+
 class CustomerBase(BaseModel):
     full_name: str
     email: str
@@ -65,6 +66,7 @@ class CustomerResponse(CustomerBase):
 
 
 # ─── Order ──────────────────────────────────────────────────────────────────
+
 
 class OrderItemCreate(BaseModel):
     product_id: int
@@ -106,6 +108,7 @@ class OrderResponse(BaseModel):
 
 
 # ─── Dashboard ──────────────────────────────────────────────────────────────
+
 
 class DashboardResponse(BaseModel):
     total_products: int

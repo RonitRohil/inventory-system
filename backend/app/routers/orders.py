@@ -22,7 +22,9 @@ def create_order(order: OrderCreate, db: Session = Depends(get_db)):
     # Validate customer exists
     customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
     if not customer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found"
+        )
 
     # Validate all products exist and have sufficient stock
     items_data = []
@@ -33,21 +35,19 @@ def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Product with id {item.product_id} not found"
+                detail=f"Product with id {item.product_id} not found",
             )
         if product.quantity < item.quantity:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Insufficient stock for '{product.name}'. Available: {product.quantity}, Requested: {item.quantity}"
+                detail=f"Insufficient stock for '{product.name}'. Available: {product.quantity}, Requested: {item.quantity}",
             )
         items_data.append((product, item.quantity))
         total_amount += product.price * item.quantity
 
     # Create the order
     db_order = Order(
-        customer_id=order.customer_id,
-        total_amount=total_amount,
-        status="pending"
+        customer_id=order.customer_id, total_amount=total_amount, status="pending"
     )
     db.add(db_order)
     db.flush()  # Get the order ID without committing
@@ -58,7 +58,7 @@ def create_order(order: OrderCreate, db: Session = Depends(get_db)):
             order_id=db_order.id,
             product_id=product.id,
             quantity=quantity,
-            unit_price=product.price
+            unit_price=product.price,
         )
         db.add(order_item)
         product.quantity -= quantity  # Deduct stock
@@ -71,14 +71,16 @@ def create_order(order: OrderCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=List[OrderResponse])
 def get_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return _get_orders_query(db).offset(skip).limit(limit).all()
+    return _get_orders_query(db).order_by(Order.id).offset(skip).limit(limit).all()
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
 def get_order(order_id: int, db: Session = Depends(get_db)):
     order = _get_orders_query(db).filter(Order.id == order_id).first()
     if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
     return order
 
 
